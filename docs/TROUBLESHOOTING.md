@@ -2,19 +2,19 @@
 
 ## 宿主检查失败
 
-`doctor` 要求 x86_64 Linux、4 KiB 页、binderfs、DMA-BUF heap、IPv6 和可用的 Docker/Compose。缺少 `binder_linux` 时先确认当前内核是否提供对应模块，再由管理员加载。不要用更换 Docker 镜像来掩盖宿主内核缺项。
+`./ldl doctor` 用于 ARM64，`./ldl-x86 doctor` 用于 x86_64 Linux。两条路线都需要 4 KiB 页、binderfs、DMA-BUF heap、IPv6 和可用的 Docker/Compose。缺少 `binder_linux` 时先确认当前内核是否提供对应模块，再由管理员加载。
 
 ## 下载与构建网络
 
 APK 下载器支持 Python 标准 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量，下载完成后校验固定 SHA256。也可把完全相同的原版包放入 `apks/` 后运行 `python3 deploy/fetch_apks.py --verify-only`。
 
-Docker 拉取镜像的代理与 Docker 构建步骤中的代理是两个配置。可先 `docker pull` 两个固定摘要的基础镜像，再构建。若使用本地标签避开仓库查询，先核对标签对应摘要，并通过 `.env` 的 `REDROID_IMAGE`、`PYTHON_IMAGE` 显式指定。
+Docker 拉取镜像和构建步骤可能用不同的代理配置。可提前拉取基础镜像。需要替换 Android 镜像时，ARM64 使用 `REDROID_IMAGE`，x86_64 使用 `LDL_X86_IMAGE`。请先核对本地镜像标签对应的摘要。
 
-容器构建中的 `127.0.0.1` 通常指向构建环境，而非宿主。需要访问宿主回环代理时，可使用仅本地的 `compose.override.yaml` 为两个服务的 `build` 设置 `network: host`，再传入构建代理参数。不要把含凭据的代理 URL 提交到仓库。运行时仍应保留默认 Compose 私有网络。
+容器构建步骤中的 `127.0.0.1` 指向构建环境。需要构建代理时，请传入构建环境可达的代理地址。不要把含凭据的代理 URL 提交到仓库。
 
 ## 页面打不开或只看到 Android 桌面
 
-- 先看 `docker compose ps` 与 `curl http://127.0.0.1:6080/health`。
+- ARM64 用 `docker compose ps` 检查，控制台默认端口 6080。x86_64 用 `./ldl-x86 compose ps`，控制台默认端口 16080。
 - 远程访问需要保持 SSH 转发运行；`localhost` 指的是当前打开浏览器的电脑。
 - 页面若显示桌面，点击“打开微信”或“打开乐动力”。
 - 应用退出时查看宿主剩余内存、`docker stats`、Android `dumpsys activity exit-info` 和 `logcat -b crash`。日志可能含个人信息，不要直接公开。

@@ -1,127 +1,117 @@
-# Li-Dong-Le
+# LDL Automation
 
-乐动力 Android 客户端的本机自动化运行方案。项目保留上游 MIT 代码署名，提供 Windows x86_64、x86_64 Linux 两条部署路线；源码不包含 APK、登录态、Cookie 或运行回执。
+基于原版乐动力客户端的容器化自动化工具。Docker Compose 同时管理 Android 和控制服务；浏览器提供首次登录和日常查看入口，Python 通过原生 MTOP SDK 读取作业、提交运动摘要并回读结果。
 
-## 先选运行方式
+当前适配乐动力 **10.14.2 / versionCode 10092**。自动作业流程使用 Activity、`WEB_URL` 和原生桥接，不依赖屏幕坐标。浏览器中的点击只是供用户手动操作 Android 界面。
 
-| 平台 | 推荐路线 | 入口 | 说明 |
-|---|---|---|---|
-| Windows 10/11 x86_64 | Android Emulator + WHPX | `ldl-windows.ps1` | 适合普通 Windows 电脑，不需要 Docker |
-| x86_64 Linux | Docker + Android 12/Houdini | `ldl` | 已在特定 AMD Linux 主机验证 |
+## 运行条件
 
-Windows 是当前主页推荐路线。Android 官方说明 API 30 x86_64 模拟器支持 ARMv7/ARM64 应用，Windows 使用 WHPX 加速：[ARM ABI 支持](https://developer.android.com/studio/releases/emulator)、[WHPX 配置](https://developer.android.com/studio/run/emulator-acceleration)。
+以下安装步骤适用于 ARM64 Linux。其他平台有单独的部署入口。
 
-## Windows 快速开始
+| 平台 | 部署入口 |
+|---|---|
+| ARM64 Linux | 本页的 Docker Compose 步骤 |
+| Apple Silicon macOS | [Lima / ARM64 虚拟机](deploy/macos/README.md) |
+| x86_64 Linux | [x86 Docker 配置](docs/LINUX-X86.md) |
+| Windows x86_64 | [Android Emulator 和 WHPX](docs/WINDOWS.md) |
 
-完整步骤见 [Windows 文档目录](docs/README.md)。第一次安装在 PowerShell 中执行：
+- Linux Docker Engine 与 Docker Compose v2。
+- 宿主内核：4KiB 页、binderfs、memfd、IPv6、DMA-BUF heap。
+- 默认容器配置支持 ARM64 Linux，推荐至少 4 GB 内存。
+- Android 服务需要 `privileged`；容器共享宿主内核，Docker无法替代缺失的内核功能。
+- Git LFS、用户自己的可用账号和网络。仓库通过Git LFS提供原版乐动力10.14.2和微信8.0.79 APK。
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\setup-windows.ps1
-py -3 deploy\fetch_apks.py
-py -3 deploy\fetch_apks.py --verify-only
-.\ldl-windows.ps1 start
-.\ldl-windows.ps1 install-apks
-.\ldl-windows.ps1 compatibility
-.\ldl-windows.ps1 open-app
+先运行检查：
+
+```sh
+./ldl doctor
 ```
 
-在 Android 模拟器或本地控制台登录微信和乐动力：
+Redroid 的宿主要求和安装说明见[官方部署文档](https://github.com/remote-android/redroid-doc/tree/master/deploy)。`./ldl doctor` 只检查环境，不修改内核、页大小或加载内核模块；macOS / Lima 模板会在专用虚拟机内安装和加载所需模块。
 
-<http://127.0.0.1:16081/>
+## 启动
 
-然后初始化并检查：
+默认数据保存在仓库旁边的 `../ldl-automation-data/`，不进入仓库或镜像。
 
-```powershell
-.\ldl-windows.ps1 setup
-.\ldl-windows.ps1 check
-.\ldl-windows.ps1 status
+使用`git clone`获取仓库，并在仓库目录拉取、校验APK：
+
+```sh
+git lfs install --local
+git lfs pull
+sha256sum -c apks/SHA256SUMS
 ```
 
-手动执行一次：
-
-```powershell
-.\ldl-windows.ps1 plan
-.\ldl-windows.ps1 run --now
-```
-
-`run` 会实际写入账号记录。只有上传后独立回查到距离、时长和作业次数都匹配，才会标记为完成。当天已完成、服务端限额已达、存在未决回执或账号未登录时，脚本会停止，不会强制重试。
-
-## Windows 文档
-
-- [文档总目录](docs/README.md)
-- [环境准备和 AVD 初始化](docs/WINDOWS-SETUP.md)
-- [启动、登录、初始化和执行](docs/WINDOWS-OPERATIONS.md)
-- [数据、备份、迁移和删除](docs/WINDOWS-DATA.md)
-- [排错](docs/WINDOWS-TROUBLESHOOTING.md)
-- [通用运维和回执规则](docs/OPERATIONS.md)
-- [验证记录与限制](docs/VALIDATION.md)
-
-Windows 运行组件：
-
-- Android 11 / API 30 Google APIs x86_64 AVD：`ldl_win_x64`
-- Windows Hypervisor Platform（WHPX）
-- ADB 设备：`emulator-5556`
-- Frida 16.7.19 Android x86_64 server
-- 本地控制台：`127.0.0.1:16081`
-
-Google Play 镜像不支持 `adb root`，Windows 方案必须使用 Google APIs x86_64 镜像。Windows ARM 主机不在当前验证范围内。
-
-## Linux Docker 快速开始
-
-Linux 路线保留原有 x86_64 容器部署：
+APK由Compose从仓库的`apks/`目录只读挂载，不进入Docker构建上下文。需要使用自己的APK目录时，可修改`.env`中的`LDL_APK_DIR`；乐动力版本仍需符合当前适配要求。
 
 ```sh
 cp .env.example .env
-python3 deploy/fetch_apks.py
-python3 deploy/fetch_apks.py --verify-only
-sudo modprobe binder_linux
-./ldl doctor
+# 软件源连接有问题时，可在.env中选择可达的DEBIAN_MIRROR镜像域名。
 docker compose up -d --build
 ./ldl install-apks
 ./ldl compatibility
 ./ldl open-app
 ```
 
-远程 Linux 主机的控制台只监听宿主回环地址，可通过 SSH 转发访问：
+在Docker宿主机浏览器访问 `http://127.0.0.1:6080`，自行完成首次登录。
+
+控制台不设置额外口令，默认仅绑定宿主回环地址；ADB端口不对宿主发布。HTTP服务检查Host和Origin，并且不会记录屏幕和输入内容。
+
+登录后初始化本人作业配置：
 
 ```sh
-ssh -N -L 16080:127.0.0.1:6080 your-user@your-server
+./ldl setup
+./ldl check
+./ldl plan
 ```
 
-然后访问 <http://127.0.0.1:16080/>。Linux 详细说明见 [运维文档](docs/OPERATIONS.md) 和 [排错文档](docs/TROUBLESHOOTING.md)。
+`setup` 从当前 Android 实例读取本人的登录态，并动态发现任务ID、班级作业ID和乐动力用户ID。该命令只读取数据和生成私有配置，不提交运动记录，也不会默认启用定时任务。
 
-## 数据与安全
-
-私有运行数据包括 Android 应用数据、账号凭据、Cookie、作业绑定、每日回执和日志。Windows 默认在仓库下的 `private\` 和 `runtime\`，Linux 默认在仓库旁的 `../li-dong-le-data/`。这些目录已被 Git 忽略。
-
-不要提交以下内容：
-
-- APK、Frida 二进制和运行日志
-- `private/`、`runtime/`、`.env`
-- 登录二维码、Cookie、Token、截图和服务器返回的个人数据
-
-控制台、ADB 和 Frida 默认只监听本机回环地址。不要把 16081、6080、27042 或 ADB 端口暴露到公网。
-
-## 执行规则
-
-- `check` 只查询服务端资格。
-- `plan` 只生成参数预览。
-- `run --now` 才会提交一次记录。
-- 每个北京时间日期本地最多提交一次，服务端每日和每周限制仍然有效。
-- `uncertain`、`awaiting_confirmation`、`needs_review` 必须先回查，不能删除回执来重试。
-- 控制器内置定时默认关闭，避免和外部调度重复。
-
-## 开发验证
+## 手动与定时
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q app deploy
-git diff --check
+# 手动执行；默认随机等待最多20分钟
+./ldl run
+# 立即执行；距离、用时仍随机
+./ldl run --now
+# 启用或关闭定时
+./ldl schedule-on
+./ldl schedule-off
+./ldl status
 ```
 
-当前 Windows 代码已通过 Python 编译、15 项离线测试和 Markdown 本地链接检查；尚未在实际 Windows x86_64 主机上完成登录与提交端到端验证。
+也可以在初始化时显式启用：`./ldl setup --enable-schedule`。
 
-## 来源与许可
+当天漏跑时，先执行 `./ldl check`。确认返回 `eligible` 后，用 `./ldl run --now` 立即补交，再用 `./ldl status` 查看结果。补交仍受当日名额和有效时段限制；该命令使用当前日期。
 
-项目基于上游提交 `f68b48f32f088253be648deca4528f16340f8434` 适配。Houdini、Android、Frida 和第三方 APK 保留各自许可，不属于本项目 MIT 授权范围。详见 [LICENSE](LICENSE)、[THIRD_PARTY.md](THIRD_PARTY.md) 和 [CHANGELOG.md](CHANGELOG.md)。
+默认每日北京时间15:00加0–20分钟随机延迟，距离3050–3300米，总用时1050–1110秒，同时满足配速330–420秒/公里。参数位于数据目录中的 `controller/state/automation/config.json`。与本人作业要求不兼容时停止执行，需要自行调整参数。
+
+脚本会检查服务端每日限额、班级作业、用户ID、作业日期和完整运动时段。同一份班级作业的任务ID变动时使用服务端返回的当前ID；班级作业变更时停止，请核对后重新执行 `./ldl setup`。手动和定时共用锁，每次写入前保留私有日志；丢失响应时不会自动重发。只有回执中的任务、距离和用时与当次提交一致，且同一份作业的计数增加，才标记完成。
+
+首次登录需要本人操作，登录失效后也可能需要重新登录。容器化不会绕过第三方应用的账号授权或服务端规则。
+
+## 数据和更新
+
+已有部署获取新版代码后，沿用原来的 `.env` 和 `LDL_DATA_DIR`，重建并启动服务：
+
+```sh
+docker compose up -d --build
+./ldl check
+```
+
+同一份班级作业的任务ID更新会在运行时自动识别，已有登录态、配置和定时设置可以继续使用。
+
+- Android数据、登录凭据、Cookie、作业ID、任务响应、记录、截图均留在外部数据目录。
+- 本机的 `.env`、镜像、运行数据和测试结果不纳入 Git 或 Docker 构建上下文。默认部署的两个原版 APK 通过 Git LFS 保存，排除在 Docker 构建上下文和源码归档之外。
+- `docker compose down` 停止容器并保留数据；重新启动可复用当前登录状态。
+- 迁移自己的部署时需保留整个数据目录，包括`android/`和`controller/`；不要把自己的数据目录提供给其他用户。
+- Android基础镜像按摘要固定。`Dockerfile.android` 在构建时禁用Android init对宿主全局sysctl的写操作；不会修改宿主配置。
+
+## 适配边界
+
+已在ARM64 Linux上使用全新数据目录验证两个镜像的构建、Android启动、健康检查、APK安装、浏览器画面/输入，以及乐动力微信登录入口跳转至微信登录页。在Waydroid环境中验证了同一班级作业变更任务ID后的补交，服务端回读确认作业计数增加。容器版尚未完成登录后的端到端提交验证。微信账号授权、其他设备及后续APK版本不在已验证范围内。版本、原生桥接或登录不匹配时会停止。
+
+Redroid默认网络是Ethernet，乐动力微信授权前置检查对此存在误判。`compatibility`会启用一个仅针对当前乐动力进程的网络兼容层：系统报告Ethernet已连接时，修正`NetStatus.isNetworkEnable`的结果。该适配使用固定版本Frida，不修改APK；不是定位模拟或环境隐匿功能。是否能完成最终账号授权仍由微信和应用服务端决定。
+
+## 许可
+
+自有控制代码采用[MIT](LICENSE)。第三方Android运行时、系统工具和应用不受本项目MIT许可证覆盖，详见[第三方说明](THIRD_PARTY.md)。仓库内的第三方APK为原始安装包，不包含个人登录态或作业运行数据。

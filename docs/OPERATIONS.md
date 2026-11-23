@@ -2,7 +2,7 @@
 
 ## 私有状态
 
-默认 `LDL_DATA_DIR=../li-dong-le-data`：
+ARM64 Linux 默认 `LDL_DATA_DIR=../ldl-automation-data`，x86 Linux 默认 `LDL_X86_DATA_DIR=../ldl-automation-x86-data`。目录内容如下：
 
 - `android/`：应用安装与登录数据。
 - `controller/state/`：账号凭据、Cookie、作业要求及兼容层状态。
@@ -13,10 +13,12 @@
 
 ## 命令
 
+下表以 ARM64 的 `./ldl` 为例。x86 Linux 使用 `./ldl-x86`，Mac 使用 `./ldl-mac`。
+
 | 命令 | 行为 |
 |---|---|
 | `./ldl doctor` | 本机环境检查 |
-| `./ldl install-apks` | 安装乐动力和 ARM32 微信 |
+| `./ldl install-apks` | 安装乐动力和与当前入口对应的微信 APK |
 | `./ldl compatibility` | 当前版本的 WebView / Ethernet 兼容设置 |
 | `./ldl open-app` | 打开乐动力并等待网络兼容层 |
 | `./ldl setup` | 读取本人登录态，初始化私有配置；定时默认关闭 |

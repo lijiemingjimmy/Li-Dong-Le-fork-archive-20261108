@@ -33,7 +33,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 - `platforms;android-30`
 - `system-images;android-30;google_apis;x86_64`
 
-然后创建名为 `ldl_win_x64` 的 AVD。不要在 AVD Manager 中改成 Google Play 镜像；Play 镜像没有 `adb root`，脚本无法注入 Frida。
+首次执行会创建名为 `ldl_win_x64` 的 AVD，重复执行会复用已有实例。启动时会检查 Android API 30、x86_64 和 `adb root`。如果已有实例的镜像不兼容，请先备份数据，再按 [迁移说明](WINDOWS-DATA.md) 手动重建。
+
+`ldl-windows.ps1` 会为项目的 Python 虚拟环境安装 Frida、证书包和 `tzdata`，支持 Python 3.11 及以上。
 
 ## 准备 APK
 
@@ -51,4 +53,4 @@ py -3 deploy\fetch_apks.py
 py -3 deploy\fetch_apks.py --verify-only
 ```
 
-仓库忽略 APK 文件。不要把 APK、登录态、Cookie 或 `private\` 目录提交到 Git。
+默认 ARM64 部署使用仓库已有的 Git LFS APK。这条 Windows 路线另外下载 ARM32 微信包。请勿提交本机下载的兼容包、登录态、Cookie 或 `private\` 目录。

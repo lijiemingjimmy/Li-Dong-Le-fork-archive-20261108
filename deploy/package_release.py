@@ -8,6 +8,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_DIRS = {'data', 'state', 'runtime', 'private', 'logs', 'screenshots', 'test-results', 'dist'}
 BINARY_SUFFIXES = {'.apk', '.so', '.dex', '.jar', '.img', '.pem', '.key', '.db', '.sqlite', '.sqlite3'}
+LFS_APKS = {'apks/ledongli.apk', 'apks/wechat.apk'}
 
 
 def git(*args):
@@ -20,6 +21,8 @@ def main():
     args = parser.parse_args()
     files = git('ls-tree', '-rz', '--name-only', 'HEAD').decode().split('\0')
     for name in filter(None, files):
+        if name in LFS_APKS:
+            continue  # Excluded from source exports by .gitattributes.
         path = Path(name)
         if (path.parts[0] in PRIVATE_DIRS or path.suffix.lower() in BINARY_SUFFIXES
                 or (path.name.startswith('.env') and path.name != '.env.example')

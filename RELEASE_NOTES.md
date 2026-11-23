@@ -22,20 +22,19 @@
 解压源码包后：
 
 ```sh
-cp .env.example .env
 python3 deploy/fetch_apks.py
 sudo modprobe binder_linux
-./ldl doctor
-docker compose up -d --build
-./ldl install-apks
-./ldl compatibility
-./ldl open-app
+./ldl-x86 doctor
+./ldl-x86 compose up -d --build
+./ldl-x86 install-apks
+./ldl-x86 compatibility
+./ldl-x86 open-app
 ```
 
-浏览器登录步骤与远程 SSH 转发见 README。本人登录后先执行 `setup`、`check`、`plan`；`run` 会生成并提交运动摘要，实际写入账号记录。
+浏览器登录步骤见 [x86 Linux 部署说明](docs/LINUX-X86.md)。本人登录后先执行 `setup`、`check`、`plan`；`run` 会生成并提交运动摘要，实际写入账号记录。
 
 ## 边界
 
-只验证了特定 AMD 主机和版本组合。旧版微信的后续登录可用性受服务端影响；其他设备与长期稳定性未覆盖。宿主必须满足内核要求，Mac 仅作为浏览器和 SSH 客户端。
+这条 x86 路线已在特定 AMD 主机和版本组合验证。旧版微信的后续登录可用性受服务端影响。Apple Silicon Mac 使用 [Lima 入口](deploy/macos/README.md)。
 
 本项目保留上游 MIT 署名；第三方应用及转译运行时仍遵循各自许可。附件为源码 `.tar.gz`、`.zip` 和 `SHA256SUMS`，不包含预置账号或第三方二进制。

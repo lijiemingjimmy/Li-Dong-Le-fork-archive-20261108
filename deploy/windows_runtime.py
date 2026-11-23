@@ -44,17 +44,18 @@ def health():
 
 
 def ensure_frida():
-    RUNTIME.mkdir(exist_ok=True)
     binary = RUNTIME / 'ldl-frida-server.exe-guest'
-    if binary.exists() and hashlib.sha256(binary.read_bytes()).hexdigest() == FRIDA_SHA256:
-        return binary
     archive = RUNTIME / 'frida-server-16.7.19-android-x86_64.xz'
-    with urllib.request.urlopen(FRIDA_URL, timeout=120) as response:
-        archive.write_bytes(response.read())
-    if hashlib.sha256(archive.read_bytes()).hexdigest() != FRIDA_SHA256:
-        archive.unlink(missing_ok=True)
-        raise RuntimeError('frida_download_checksum_mismatch')
-    binary.write_bytes(lzma.decompress(archive.read_bytes()))
+    packed = archive.read_bytes() if archive.is_file() else b''
+    if hashlib.sha256(packed).hexdigest() != FRIDA_SHA256:
+        with urllib.request.urlopen(FRIDA_URL, timeout=120) as response:
+            packed = response.read()
+        if hashlib.sha256(packed).hexdigest() != FRIDA_SHA256:
+            raise RuntimeError('frida_download_checksum_mismatch')
+        archive.write_bytes(packed)
+    unpacked = lzma.decompress(packed)
+    if not binary.is_file() or binary.read_bytes() != unpacked:
+        binary.write_bytes(unpacked)
     return binary
 
 
@@ -64,7 +65,7 @@ def start():
         raise RuntimeError('android_emulator_not_found_install_sdk_emulator')
     if not (SDK / 'platform-tools' / ('adb.exe' if os.name == 'nt' else 'adb')).exists():
         raise RuntimeError('adb_not_found_install_platform_tools')
-    binary = ensure_frida()
+    RUNTIME.mkdir(exist_ok=True)
     rows = subprocess.check_output(['adb', 'devices'], text=True, stderr=subprocess.DEVNULL)
     if SERIAL not in rows:
         log = (RUNTIME / 'emulator.log').open('ab')
@@ -78,6 +79,9 @@ def start():
     avd = device.adb('emu', 'avd', 'name').splitlines()[0].strip()
     if avd != AVD:
         raise RuntimeError('reserved_port_used_by_other_avd')
+    if (device.shell('getprop', 'ro.build.version.sdk') != '30' or
+            device.shell('getprop', 'ro.product.cpu.abi') != 'x86_64'):
+        raise RuntimeError('android_30_x86_64_avd_required')
     root_result = subprocess.run(['adb', '-s', SERIAL, 'root'], capture_output=True, text=True)
     if root_result.returncode:
         raise RuntimeError('rootable_google_apis_avd_required')
@@ -90,6 +94,7 @@ def start():
     except RuntimeError:
         running = ''
     if not running:
+        binary = ensure_frida()
         device.adb('push', str(binary), '/data/local/tmp/ldl-frida-server')
         device.shell('chmod', '700', '/data/local/tmp/ldl-frida-server')
         device.shell('sh', '-c', 'nohup /data/local/tmp/ldl-frida-server --listen=127.0.0.1:27042 >/data/local/tmp/ldl-frida.log 2>&1 </dev/null &')
@@ -114,4 +119,4 @@ if __name__ == '__main__':
     if sys.argv[1:] == ['start']:
         start()
     else:
-        os.execv(sys.executable, [sys.executable, str(ROOT / 'app' / 'controller.py'), *sys.argv[1:]])
+        raise SystemExit(subprocess.call([sys.executable, str(ROOT / 'app' / 'controller.py'), *sys.argv[1:]]))

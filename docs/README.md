@@ -2,6 +2,8 @@
 
 | 文档 | 内容 |
 |---|---|
+| [x86_64 Linux](LINUX-X86.md) | 独立的 x86 Docker 配置、安装和迁移 |
+| [Apple Silicon macOS](../deploy/macos/README.md) | Lima 环境、安装和更新 |
 | [Windows 总览](WINDOWS.md) | Windows 适配方案、入口和验证范围 |
 | [环境准备](WINDOWS-SETUP.md) | Python、Android Studio、WHPX、SDK、AVD、APK |
 | [启动与操作](WINDOWS-OPERATIONS.md) | 启动、安装、登录、初始化、预览、执行 |

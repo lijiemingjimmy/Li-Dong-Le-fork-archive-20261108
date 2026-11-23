@@ -1,15 +1,17 @@
 # Windows 常见问题
 
-## `adb root` 失败
+## AVD 型号不匹配或 `adb root` 失败
 
-通常是误用了 Google Play 镜像，或者当前 AVD 不是 `ldl_win_x64`。检查：
+通常是 API 版本、CPU 架构或镜像类型有误，或者当前 AVD 不是 `ldl_win_x64`。检查：
 
 ```powershell
 adb -s emulator-5556 emu avd name
+adb -s emulator-5556 shell getprop ro.build.version.sdk
+adb -s emulator-5556 shell getprop ro.product.cpu.abi
 adb -s emulator-5556 root
 ```
 
-应该看到 AVD 名称 `ldl_win_x64`，并且 `adb root` 能重启 adbd。不要在 Play 镜像上清空数据解决这个问题，应重新创建 Google APIs x86_64 AVD。
+应看到 AVD 名称 `ldl_win_x64`、API 版本 `30`、架构 `x86_64`，并且 `adb root` 能重启 adbd。镜像不兼容时，先按 [备份说明](WINDOWS-DATA.md) 保存数据，再手动重建 Google APIs AVD。
 
 ## WHPX 不可用或启动很慢
 

@@ -1,0 +1,70 @@
+minimumLimaVersion: 2.0.0
+base:
+  - template:_images/ubuntu-24.04
+arch: aarch64
+vmType: vz
+cpus: 4
+memory: 4GiB
+disk: 40GiB
+# Keep source and Android data on the guest's Linux filesystem.
+mounts: []
+containerd:
+  system: false
+  user: false
+portForwards:
+  - guestPort: 6080
+    hostIP: 127.0.0.1
+    hostPort: 6080
+  - guestPortRange: [1, 65535]
+    guestIP: 0.0.0.0
+    guestIPMustBeZero: false
+    proto: any
+    ignore: true
+provision:
+  - mode: system
+    script: |
+      #!/bin/sh
+      set -eu
+      [ "$(getconf PAGE_SIZE)" = 4096 ] || {
+        echo 'This Android image requires a 4KiB guest kernel.' >&2; exit 1;
+      }
+      export DEBIAN_FRONTEND=noninteractive
+      sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
+      apt-get -o Acquire::Retries=3 update
+      apt-get -o Acquire::Retries=3 install -y \
+        "linux-modules-extra-$(uname -r)" docker.io docker-compose-v2 docker-buildx
+      modprobe binder_linux
+      printf 'binder_linux\n' > /etc/modules-load.d/ldl-binder.conf
+      grep -qw binder /proc/filesystems
+      test -e /dev/dma_heap/system
+      test -d /proc/sys/net/ipv6
+      # Lima translates a host loopback proxy into a guest-reachable address.
+      # Docker's system service also needs it to pull images.
+      python3 - <<'PY'
+      import json, os
+      from pathlib import Path
+      proxies = {}
+      for key in ('http', 'https', 'no'):
+          value = os.environ.get(key + '_proxy') or os.environ.get(key.upper() + '_PROXY')
+          if value:
+              proxies[key + '-proxy'] = value
+      if proxies:
+          path = Path('/etc/docker/daemon.json')
+          path.parent.mkdir(exist_ok=True)
+          config = json.loads(path.read_text()) if path.exists() else {}
+          config['proxies'] = proxies
+          path.touch(mode=0o600, exist_ok=True)
+          path.chmod(0o600)
+          path.write_text(json.dumps(config))
+      PY
+      systemctl enable docker
+      systemctl restart docker
+probes:
+  - script: |
+      #!/bin/sh
+      set -eu
+      grep -qw binder /proc/filesystems
+      test -e /dev/dma_heap/system
+      sudo docker info >/dev/null
+      sudo docker compose version
+    hint: Check /var/log/cloud-init-output.log and the guest kernel modules.

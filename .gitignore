@@ -11,6 +11,8 @@
 /test-results/
 /dist/
 *.apk
+!/apks/ledongli.apk
+!/apks/wechat.apk
 *.dex
 *.jar
 *.so

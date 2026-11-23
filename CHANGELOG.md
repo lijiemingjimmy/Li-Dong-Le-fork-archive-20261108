@@ -3,6 +3,7 @@
 ## Unreleased
 
 - 增加 Windows x86_64 本机运行方案：Android 11 Google APIs AVD、WHPX、PowerShell/CMD 入口、Windows 文件锁兼容，以及分开的安装、操作、数据和排错文档。
+- Linux x86_64 使用独立的 `ldl-x86` 入口和数据目录。主分支的默认 ARM64 配置和 Mac / Lima 使用的 Git LFS APK 继续可用。
 
 ## v0.1.0 — 2026-11-08
 
