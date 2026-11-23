@@ -1,0 +1,83 @@
+#!/bin/sh
+# macOS entry point; Android/Docker operations run inside Lima.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+INSTANCE=${LDL_LIMA_INSTANCE:-ldl-macos}
+GUEST_ROOT=/opt/ldl
+
+usage() {
+    cat <<'EOF'
+Usage: ./ldl-mac init|sync|start|stop|shell|compose [args...]
+       ./ldl-mac <ldl command> [args...]
+
+init     Create a dedicated VM, copy source/APKs, build and start containers.
+sync     Copy tracked source/APKs (preserves guest .env and runtime data).
+start    Start an existing VM and its containers without rebuilding.
+stop     Shut down the VM; keeps all data.
+shell    Open a shell in /opt/ldl inside the VM.
+compose  Run Docker Compose inside the VM.
+Other commands, including doctor, setup, check and status, go to ./ldl.
+
+Environment: LDL_LIMA_INSTANCE (default: ldl-macos), LIMA_HOME (Lima default).
+See deploy/macos/README.md for prerequisites, external disks and first login.
+EOF
+}
+
+case "${1:-help}" in help|-h|--help) usage; exit 0 ;; esac
+[ "$(uname -s)" = Darwin ] || { echo 'Requires macOS; use ./ldl on Linux.' >&2; exit 1; }
+[ "$(uname -m)" = arm64 ] || { echo 'Only Apple Silicon Macs are supported.' >&2; exit 1; }
+case "$INSTANCE" in ''|*[!a-zA-Z0-9_-]*) echo 'Invalid LDL_LIMA_INSTANCE.' >&2; exit 1 ;; esac
+command -v limactl >/dev/null 2>&1 || { echo 'Install Lima first: brew install lima' >&2; exit 1; }
+
+guest() { limactl shell --workdir "$GUEST_ROOT" "$INSTANCE" "$@"; }
+verify_apks() { (cd "$ROOT" && shasum -a 256 -c apks/SHA256SUMS); }
+sync_source() {
+    verify_apks
+    # Only tracked public files; .env and runtime directories are never copied.
+    # Complete tar before transfer so a pipeline cannot hide archive failures.
+    transfer_dir=$(mktemp -d "${TMPDIR:-/tmp}/ldl-source.XXXXXX")
+    trap 'rm -rf "$transfer_dir"' EXIT HUP INT TERM
+    git -C "$ROOT" ls-files -z -- app web deploy Dockerfile Dockerfile.android \
+        compose.yaml ldl .dockerignore .env.example LICENSE THIRD_PARTY.md \
+        apks/ledongli.apk apks/wechat.apk apks/SHA256SUMS > "$transfer_dir/files"
+    COPYFILE_DISABLE=1 tar --no-xattrs --no-recursion -C "$ROOT" \
+        -cf "$transfer_dir/source.tar" --null -T "$transfer_dir/files"
+    limactl shell --workdir /tmp "$INSTANCE" sudo mkdir -p "$GUEST_ROOT"
+    guest sudo tar -xf - < "$transfer_dir/source.tar"
+    rm -rf "$transfer_dir"
+    trap - EXIT HUP INT TERM
+    guest sudo sh -c 'test -e .env || cp .env.example .env; sha256sum -c apks/SHA256SUMS'
+}
+
+command=$1
+shift
+case "$command" in
+    init)
+        verify_apks
+        # Never implicitly adopt/reprovision an existing instance.
+        instances=$(limactl list --format '{{.Name}}')
+        if printf '%s\n' "$instances" | grep -Fxq "$INSTANCE"; then
+            echo "VM $INSTANCE already exists. Use start, sync or shell; see the recovery guide." >&2
+            exit 1
+        fi
+        limactl start --yes --name "$INSTANCE" "$ROOT/deploy/macos/lima.yaml"
+        sync_source
+        guest sudo ./ldl doctor
+        guest sh -c 'sudo docker compose build --build-arg HTTP_PROXY="${http_proxy:-${HTTP_PROXY:-}}" --build-arg HTTPS_PROXY="${https_proxy:-${HTTPS_PROXY:-}}" --build-arg NO_PROXY="${no_proxy:-${NO_PROXY:-}}"'
+        guest sudo docker compose up -d --no-build
+        ;;
+    sync) sync_source ;;
+    start)
+        # A name-only start can create Lima's default VM if the name is absent.
+        instances=$(limactl list --format '{{.Name}}')
+        printf '%s\n' "$instances" | grep -Fxq "$INSTANCE" || {
+            echo "VM $INSTANCE is missing. Run ./ldl-mac init first." >&2; exit 1;
+        }
+        limactl start --yes "$INSTANCE"
+        guest sudo docker compose up -d --no-build
+        ;;
+    stop) exec limactl stop "$INSTANCE" ;;
+    shell) exec limactl shell --workdir "$GUEST_ROOT" "$INSTANCE" "$@" ;;
+    compose) guest sudo docker compose "$@" ;;
+    *) guest sudo ./ldl "$command" "$@" ;;
+esac
