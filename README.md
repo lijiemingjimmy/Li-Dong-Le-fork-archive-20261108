@@ -6,6 +6,8 @@
 
 ## 运行条件
 
+Apple Silicon Mac 用户可使用 [macOS / Lima 部署入口](deploy/macos/README.md)，在专用 ARM64 Linux 虚拟机中运行本项目。
+
 - Linux Docker Engine 与 Docker Compose v2。
 - 宿主内核：4KiB 页、binderfs、memfd、IPv6、DMA-BUF heap。
 - 当前发布包支持ARM64 Linux，推荐至少4GB内存。AMD64不在本版本适配范围内。
@@ -18,7 +20,7 @@
 ./ldl doctor
 ```
 
-Redroid 的宿主要求和安装说明见[官方部署文档](https://github.com/remote-android/redroid-doc/tree/master/deploy)。本项目不会自动修改宿主内核、页大小或加载内核模块。
+Redroid 的宿主要求和安装说明见[官方部署文档](https://github.com/remote-android/redroid-doc/tree/master/deploy)。`./ldl doctor` 只检查环境，不修改内核、页大小或加载内核模块；macOS / Lima 模板会在专用虚拟机内安装和加载所需模块。
 
 ## 启动
 
